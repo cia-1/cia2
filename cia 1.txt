@@ -1,0 +1,354 @@
+1) DOT PRODUCT:-
+
+
+#include <stdio.h>
+#include <sys/time.h>
+
+double cpusecond() {
+    struct timeval tp;
+    gettimeofday(&tp, NULL);
+    return ((double)tp.tv_sec + (double)tp.tv_usec * 1.e-6);
+}
+
+__global__ void dotproductkernel(int* a, int* b, int* result, int n) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    int index = tid;
+
+    if (index < n) {
+        a[index] = a[index] * b[index];
+    }
+
+    __syncthreads();
+
+    for (int stride = 1; stride < n; stride *= 2) {
+        if (index % (2 * stride) == 0 && (index + stride) < n) {
+            a[index] += a[index + stride];
+        }
+    }
+
+    __syncthreads();
+
+    if (index == 0) {
+        *result = a[0];
+    }
+}
+
+int main() {
+    const int N = 5;
+
+    int h_a[N] = {1, 2, 3, 4, 5};
+    int h_b[N] = {10, 20, 30, 40, 50};
+    int h_result = 0;
+
+    int *d_a, *d_b, *d_result;
+
+    cudaMalloc((void**)&d_a, N * sizeof(int));
+    cudaMalloc((void**)&d_b, N * sizeof(int));
+    cudaMalloc((void**)&d_result, sizeof(int));
+
+    cudaMemcpy(d_a, h_a, N * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_b, h_b, N * sizeof(int), cudaMemcpyHostToDevice);
+
+    double gpu_start = cpusecond();
+
+    int threadsperblock = 5;
+    int blocks = (N + threadsperblock - 1) / threadsperblock;
+
+    dotproductkernel<<<blocks, threadsperblock>>>(d_a, d_b, d_result, N);
+    cudaDeviceSynchronize();
+
+    double gpu_end = cpusecond();
+
+    cudaMemcpy(&h_result, d_result, sizeof(int), cudaMemcpyDeviceToHost);
+
+    printf("dot product: %d\n", h_result);
+    printf("GPU computation time: %f seconds\n", gpu_end - gpu_start);
+
+    cudaFree(d_a);
+    cudaFree(d_b);
+    cudaFree(d_result);
+
+    return 0;
+}
+
+
+
+
+2) MATRIX TRANSPOSE:-
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#define N 3
+
+__global__ void transposer(int *input, int *output, int width) {
+    __shared__ int tile[N][N];
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < width * width) {
+        int row = idx / width;
+        int col = idx % width;
+        tile[col][row] = input[row * width + col];
+        __syncthreads();
+        output[idx] = tile[row][col];
+    }
+}
+
+int main() {
+    int size = N * N * sizeof(int);
+    int h_input[N * N], h_output[N * N];
+    srand(time(NULL));
+    for (int i = 0; i < N * N; i++) {
+        h_input[i] = rand() % 100;
+    }
+    int *d_input, *d_output;
+    cudaMalloc(&d_input, size);
+    cudaMalloc(&d_output, size);
+    cudaMemcpy(d_input, h_input, size, cudaMemcpyHostToDevice);
+    int threadsPerBlock = 256;
+    int blocksPerGrid = (N * N + threadsPerBlock - 1) / threadsPerBlock;
+    transposer<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, N);
+    cudaMemcpy(h_output, d_output, size, cudaMemcpyDeviceToHost);
+    printf("Original Matrix:\n");
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            printf("%2d ", h_input[i * N + j]);
+        }
+        printf("\n");
+    }
+    printf("\nTransposed Matrix:\n");
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            printf("%2d ", h_output[i * N + j]);
+        }
+        printf("\n");
+    }
+    cudaFree(d_input);
+    cudaFree(d_output);
+    return 0;
+}
+
+
+
+
+3) STENCIL:-
+
+
+#include <stdio.h>
+
+#define N 8
+#define RADIUS 1
+
+__constant__ int d_weights[2 * RADIUS + 1];
+
+__global__ void stencil1D(int *in, int *out) {
+    int i = threadIdx.x;
+    int result = 0;
+    for (int j = -RADIUS; j <= RADIUS; j++) {
+        int idx = i + j;
+        if (idx >= 0 && idx < N) {
+            result += d_weights[j + RADIUS] * in[idx];
+        }
+    }
+    out[i] = result;
+}
+
+int main() {
+    int h_in[N] = {1, 2, 3, 4, 5, 6, 7, 8};
+    int h_out[N];
+    int *d_in, *d_out;
+    int h_weights[2 * RADIUS + 1] = {1, 1, 1};
+
+    cudaMemcpyToSymbol(d_weights, h_weights, sizeof(h_weights));
+    cudaMalloc(&d_in, N * sizeof(int));
+    cudaMalloc(&d_out, N * sizeof(int));
+    cudaMemcpy(d_in, h_in, N * sizeof(int), cudaMemcpyHostToDevice);
+
+    stencil1D<<<1, N>>>(d_in, d_out);
+
+    cudaMemcpy(h_out, d_out, N * sizeof(int), cudaMemcpyDeviceToHost);
+
+    printf("Input : ");
+    for (int i = 0; i < N; i++) printf("%d ", h_in[i]);
+    printf("\nOutput: ");
+    for (int i = 0; i < N; i++) printf("%d ", h_out[i]);
+    printf("\n");
+
+    cudaFree(d_in);
+    cudaFree(d_out);
+
+    return 0;
+}
+
+
+
+
+5) ODD EVEN TRANSPOSITION SORT :-
+
+#include <stdio.h>
+#define N 20
+
+__global__ void oddEvenTS(int *data, int n, int phase) {
+    int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    if (tid < n - 1) {
+        if (phase % 2 == 0 && (tid % 2 == 0)) {
+            if (data[tid] > data[tid + 1]) {
+                int temp = data[tid];
+                data[tid] = data[tid + 1];
+                data[tid + 1] = temp;
+            }
+        }
+        if (phase % 2 == 1 && (tid % 2 == 1)) {
+            if (data[tid] > data[tid + 1]) {
+                int temp = data[tid];
+                data[tid] = data[tid + 1];
+                data[tid + 1] = temp;
+            }
+        }
+    }
+}
+
+int main() {
+    int h_data[N] = {9,4,8,3,1,2,7,6,5,0,12,57,89,65,42,36,71,99,87,20};
+    int *d_data;
+
+    printf("Original array: ");
+    for (int i = 0; i < N; i++)
+        printf("%d ", h_data[i]);
+    printf("\n");
+
+    cudaMalloc((void **)&d_data, N * sizeof(int));
+    cudaMemcpy(d_data, h_data, N * sizeof(int), cudaMemcpyHostToDevice);
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    int threadsPerBlock = 10;
+    int blocksPerGrid = (N * N + threadsPerBlock - 1) / threadsPerBlock;
+
+    cudaEventRecord(start);
+
+    for (int phase = 0; phase < N; phase++) {
+        oddEvenTS<<<blocksPerGrid, threadsPerBlock>>>(d_data, N, phase);
+        cudaDeviceSynchronize();
+    }
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float elapsedTime = 0;
+    cudaEventElapsedTime(&elapsedTime, start, stop);
+
+    cudaMemcpy(h_data, d_data, N * sizeof(int), cudaMemcpyDeviceToHost);
+
+    printf("Sorted array: ");
+    for (int i = 0; i < N; i++)
+        printf("%d ", h_data[i]);
+    printf("\n");
+
+    printf("\n===== COMPLEXITY ANALYSIS =====\n");
+    printf("Time Complexity (Parallel) : O(N) phases ≈ %d phases\n", N);
+    printf("Cost Complexity : O(N * N) = O(N^2) ≈ %d operations\n", N * N);
+    printf("Actual Execution Time : %.5f ms\n", elapsedTime);
+
+    cudaFree(d_data);
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+    return 0;
+}
+
+
+
+6) QUICK SORT:-
+
+#include <stdio.h>
+#include <math.h>
+#define N 16
+#define TPB 8
+#define MIN_PART 16
+
+__device__ void insertionSort(int *a, int l, int r) {
+    for (int i = l + 1; i <= r; i++) {
+        int key = a[i], j = i - 1;
+        while (j >= l && a[j] > key) { a[j + 1] = a[j]; j--; }
+        a[j + 1] = key;
+    }
+}
+
+__device__ int partition(int *a, int l, int r) {
+    int p = a[r], i = l - 1;
+    for (int j = l; j < r; j++)
+        if (a[j] < p) { i++; int t = a[i]; a[i] = a[j]; a[j] = t; }
+    int t = a[i + 1]; a[i + 1] = a[r]; a[r] = t;
+    return i + 1;
+}
+
+__global__ void quicksortKernel(int *a, int *l, int *r, int *nl, int *nr, int nTasks, int *next) {
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+    if (id >= nTasks) return;
+
+    int low = l[id], high = r[id];
+    if (low < high) {
+        if (high - low + 1 <= MIN_PART) { insertionSort(a, low, high); return; }
+
+        int p = partition(a, low, high);
+        if (p - 1 > low) { int idx = atomicAdd(next, 1); nl[idx] = low; nr[idx] = p - 1; }
+        if (p + 1 < high){ int idx = atomicAdd(next, 1); nl[idx] = p + 1; nr[idx] = high; }
+    }
+}
+
+int main() {
+    int h_a[N] = {24,17,85,13,9,54,76,45,4,63,21,33,89,12,99,1};
+    int *d_a; cudaMalloc(&d_a, N*sizeof(int));
+    cudaMemcpy(d_a, h_a, N*sizeof(int), cudaMemcpyHostToDevice);
+
+    int *l, *r, *nl, *nr, *next;
+    cudaMalloc(&l, N*sizeof(int)); cudaMalloc(&r, N*sizeof(int));
+    cudaMalloc(&nl, N*sizeof(int)); cudaMalloc(&nr, N*sizeof(int));
+    cudaMalloc(&next, sizeof(int));
+
+    int h_l[1] = {0}, h_r[1] = {N-1};
+    cudaMemcpy(l, h_l, sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(r, h_r, sizeof(int), cudaMemcpyHostToDevice);
+
+    cudaEvent_t start, stop; cudaEventCreate(&start); cudaEventCreate(&stop);
+    cudaEventRecord(start);
+
+    int nTasks = 1;
+    while (nTasks > 0) {
+        cudaMemset(next, 0, sizeof(int));
+        int blocks = (nTasks + TPB - 1) / TPB;
+        quicksortKernel<<<blocks, TPB>>>(d_a, l, r, nl, nr, nTasks, next);
+        cudaDeviceSynchronize();
+        cudaMemcpy(&nTasks, next, sizeof(int), cudaMemcpyDeviceToHost);
+
+        int *tmpL = l; l = nl; nl = tmpL;
+        int *tmpR = r; r = nr; nr = tmpR;
+    }
+    cudaEventRecord(stop); cudaEventSynchronize(stop);
+    float ms; cudaEventElapsedTime(&ms, start, stop);
+
+    cudaMemcpy(h_a, d_a, N*sizeof(int), cudaMemcpyDeviceToHost);
+
+    double log2n = log2((double)N);
+    double timec = ((double)N * log2n) / TPB;
+    double costc = (double)N * log2n;
+
+    printf("Sorted Array: ");
+    for (int i = 0; i < N; i++) printf("%d ", h_a[i]);
+    printf("\n\n===== COMPLEXITY ANALYSIS =====\n");
+    printf("Time Complexity : O((N log N)/P) = %.2f units\n", timec);
+    printf("Cost Complexity : O(N log N) = %.2f units\n", costc);
+    printf("Execution Time : %.5f ms\n", ms);
+
+    cudaFree(d_a); cudaFree(l); cudaFree(r);
+    cudaFree(nl); cudaFree(nr); cudaFree(next);
+    cudaEventDestroy(start); cudaEventDestroy(stop);
+    return 0;
+}
+
+
+
+
+
