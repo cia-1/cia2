@@ -1,4 +1,197 @@
+============================ESP32===================
 
+IR and PIR:
+---------------
+int IRSensor=2;
+int MotionSensor = 27;
+const int LED = 6;
+int LEDstate = low;
+int Pinstatecurrent = low;
+int Pinstateprevious = low;
+void setup(){
+pinMode (LED,OUTPUT);
+pinMode (IRSENSOR,INPUT);
+pinMode (MotionSensor ,INPUT);
+}
+void loop{
+Pinstateprevious = Pinstatecurrent;
+Pinstatecurrent = digitalRead(MotionSensor);
+if(Pinstatecurrent == HIGH && Pinstateprevious == LOW ){
+Serial.println("Motion Detected");
+int statussensor = digitalRead(IRsensor);
+delay(250);
+if(statusSensor==1){
+digitalWrite(LED,1000);
+Serial.println("Person detected but height not matched");
+}
+else{
+digitalWrite(LED,HIGH);
+Serial.println("Person detected and height matched");
+}}
+if(Pinstateprevious ==Pinstatecurrent){
+Serial.println("No Motion Detected");
+digitalWrite(LED,Low);
+}
+}
+
+************************************************************************
+
+DHT:
+------
+#include "DHT.h"
+
+#define DHTPIN 4     // Digital pin connected to the DHT sensor
+// Feather HUZZAH ESP8266 note: use pins 3, 4, 5, 12, 13 or 14 --
+// Pin 15 can work but DHT must be disconnected during program upload.
+
+// Uncomment whatever type you're using!
+//#define DHTTYPE DHT11   // DHT 11
+#define DHTTYPE DHT22   // DHT 22  (AM2302), AM2321
+//#define DHTTYPE DHT21   // DHT 21 (AM2301)
+
+// Connect pin 1 (on the left) of the sensor to +5V
+// NOTE: If using a board with 3.3V logic like an Arduino Due connect pin 1
+// to 3.3V instead of 5V!
+// Connect pin 2 of the sensor to whatever your DHTPIN is
+// Connect pin 4 (on the right) of the sensor to GROUND
+// Connect a 10K resistor from pin 2 (data) to pin 1 (power) of the sensor
+
+// Initialize DHT sensor.
+// Note that older versions of this library took an optional third parameter to
+// tweak the timings for faster processors.  This parameter is no longer needed
+// as the current DHT reading algorithm adjusts itself to work on faster procs.
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+  Serial.begin(9600);
+  Serial.println(F("DHTxx test!"));
+
+  dht.begin();
+}
+
+void loop() {
+  // Wait a few seconds between measurements.
+  delay(2000);
+
+  // Reading temperature or humidity takes about 250 milliseconds!
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  float h = dht.readHumidity();
+  // Read temperature as Celsius (the default)
+  float t = dht.readTemperature();
+  // Read temperature as Fahrenheit (isFahrenheit = true)
+  float f = dht.readTemperature(true);
+
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(h) || isnan(t) || isnan(f)) {
+    Serial.println(F("Failed to read from DHT sensor!"));
+    return;
+  }
+
+  // Compute heat index in Fahrenheit (the default)
+  float hif = dht.computeHeatIndex(f, h);
+  // Compute heat index in Celsius (isFahreheit = false)
+  float hic = dht.computeHeatIndex(t, h, false);
+
+  Serial.print(F("Humidity: "));
+  Serial.print(h);
+  Serial.print(F("%  Temperature: "));
+  Serial.print(t);
+  Serial.print(F("°C "));
+  Serial.print(f);
+  Serial.print(F("°F  Heat index: "));
+  Serial.print(hic);
+  Serial.print(F("°C "));
+  Serial.print(hif);
+  Serial.println(F("°F"));
+}
+
+***************************************************************************
+LM35:
+---------
+#define ADC_VREF_mV    3300.0 // in millivolt
+#define ADC_RESOLUTION 4096.0
+#define PIN_LM35       36 // ESP32 pin GIOP36 (ADC0) connected to LM35
+
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  // read the ADC value from the temperature sensor
+  int adcVal = analogRead(PIN_LM35);
+  // convert the ADC value to voltage in millivolt
+  float milliVolt = adcVal * (ADC_VREF_mV / ADC_RESOLUTION);
+  // convert the voltage to the temperature in °C
+  float tempC = milliVolt / 10;
+  // convert the °C to °F
+  float tempF = tempC * 9 / 5 + 32;
+
+  // print the temperature in the Serial Monitor:
+  Serial.print("Temperature: ");
+  Serial.print(tempC);   // print the temperature in °C
+  Serial.print("°C");
+  Serial.print("  ~  "); // separator between °C and °F
+  Serial.print(tempF);   // print the temperature in °F
+  Serial.println("°F");
+
+  delay(500);
+}
+*************************************************************
+LIGHT SENSOR:
+-------------
+#define LIGHT_SENSOR_PIN 36 // ESP32 pin GIOP36 (ADC0)
+
+void setup() {
+  // initialize serial communication at 9600 bits per second:
+  Serial.begin(9600);
+}
+
+void loop() {
+  // reads the input on analog pin (value between 0 and 4095)
+  int analogValue = analogRead(LIGHT_SENSOR_PIN);
+
+  Serial.print("Analog Value = ");
+  Serial.print(analogValue);   // the raw analog reading
+
+  // We'll have a few threshholds, qualitatively determined
+  if (analogValue < 40) {
+    Serial.println(" => Dark");
+  } else if (analogValue < 800) {
+    Serial.println(" => Dim");
+  } else if (analogValue < 2000) {
+    Serial.println(" => Light");
+  } else if (analogValue < 3200) {
+    Serial.println(" => Bright");
+  } else {
+    Serial.println(" => Very bright");
+  }
+
+  delay(500);
+}
+*************************************************************
+potentiometer:
+-------------
+
+
+#define POTENTIOMETER_PIN 36 // ESP32 pin GIOP36 (ADC0) connected to Potentiometer pin
+#define LED_PIN           21 // ESP32 pin GIOP21 connected to LED's pin
+#define ANALOG_THRESHOLD  1000
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT); // set ESP32 pin to output mode
+}
+
+void loop() {
+  int analogValue = analogRead(POTENTIOMETER_PIN); // read the input on analog pin
+
+  if (analogValue > ANALOG_THRESHOLD)
+    digitalWrite(LED_PIN, HIGH); // turn on LED
+  else
+    digitalWrite(LED_PIN, LOW);  // turn off LED
+}
+
+************************************************************
+=========================PI==========================
 LED Blinking:
 ------------
 
@@ -658,7 +851,145 @@ i 2 c for Arduino Uno Code:
     delay(100);
 }
 
+=============================thing speak========================================
+----------dht sensor------------
 
+#include <WiFi.h>
+#include "ThingSpeak.h"
+#include “DHT.h”
+#define DHTPIN 4
+#define DHTTYPE DHT11 // DHT11 or DHT22
+DHT dht(DHTPIN, DHTTYPE);
+const char* ssid = "REPLACE_WITH_YOUR_SSID"; // your network SSID (name)
+const char* password = "REPLACE_WITH_YOUR_PASSWORD"; // your network password
+WiFiClient client;
+unsigned long myChannelNumber = xxxx; // channel number shown in private window tab
+const char * myWriteAPIKey = "XXXXXXXXXXXXXXXX";
+// Timer variables
+unsigned long lastTime = 0;
+unsigned long timerDelay = 30000;
+// Variable to hold temperature readings
+float tempC,humidity;
+void setup()
+{
+pinmode (DHTPIN,INPUT);
+Serial.begin(115200); //Initialize serial
+WiFi.mode(WIFI_STA);
+ThingSpeak.begin(client); // Initialize ThingSpeak
+}
+void loop() {
+if ((millis() - lastTime) > timerDelay)
+{
+// Connect or reconnect to WiFi
+if(WiFi.status() != WL_CONNECTED){
+Serial.print("Attempting to connect");
+while(WiFi.status() != WL_CONNECTED){
+WiFi.begin(ssid, password);
+delay(5000);
+}
+Serial.println("\nConnected.");
+}
+// Get a new temperature reading
+float tempC =dht.readTemperature();
+float humidity = dht.readHumidity();
+Serial.print("Temperature (oC): ");
+Serial.println(tempC);
+Serial.print("Humidity (%): ");
+Serial.println(humidity);
+// set the fields with the values
+ThingSpeak.setField(1, temperatureC);
+ThingSpeak.setField(2, humidity);
+// Write to ThingSpeak. There are up to 8 fields in a channel, allowing the user to store up to 8
+different pieces of information in a channel.
+int x = ThingSpeak.writeField(myChannelNumber, myWriteAPIKey);
+//To write to ThingSpeak , use the writeField() method that accepts the following arguments : (a)
+the channel number (b) the field number (in our case, there is only one field) (c) the value to be
+published (temperatureC) and (d) the write API key.This function returns the code 200 if it has
+succeeded in publishing the readings //
+if(x == 200)
+{
+Serial.println("Channel update successful.");
+
+}
+else
+{
+Serial.println("Problem updating channel. HTTP error code " + String(x));
+}
+lastTime = millis();
+}
+}
+
+-----------------lm35 sensor----------------
+#include <WiFi.h>
+#include "ThingSpeak.h"
+#define ADC_VREF_mV 3300.0 // in millivolt
+#define ADC_RESOLUTION 4096.0
+#define PIN_LM35 36 // ESP32 pin GIOP36 (ADC0) connected to LM35
+/* #include “DHT.h”
+#define DHTPIN 4
+#define DHTTYPE DHT11 // DHT11 or DHT22
+DHT dht(DHTPIN, DHTTYPE); */ // uncomment these lines if DHT sensor is used
+const char* ssid = "REPLACE_WITH_YOUR_SSID"; // your network SSID (name)
+const char* password = "REPLACE_WITH_YOUR_PASSWORD"; // your network password
+WiFiClient client;
+unsigned long myChannelNumber = xxxx; // channel number shown in private window tab
+const char * myWriteAPIKey = "XXXXXXXXXXXXXXXX";
+// Timer variables
+unsigned long lastTime = 0;
+unsigned long timerDelay = 30000;
+// Variable to hold temperature readings
+float tempC;
+void setup()
+{
+pinmode (temppin,INPUT);
+Serial.begin(115200); //Initialize serial
+WiFi.mode(WIFI_STA);
+ThingSpeak.begin(client); // Initialize ThingSpeak
+}
+void loop() {
+if ((millis() - lastTime) > timerDelay)
+{
+// Connect or reconnect to WiFi
+if(WiFi.status() != WL_CONNECTED){
+Serial.print("Attempting to connect");
+while(WiFi.status() != WL_CONNECTED){
+WiFi.begin(ssid, password);
+delay(5000);
+}
+Serial.println("\nConnected.");
+}
+// Get a new temperature reading
+int adcVal = analogRead(PIN_LM35);
+// convert the ADC value to voltage in millivolt
+float milliVolt = adcVal * (ADC_VREF_mV / ADC_RESOLUTION);
+// convert the voltage to the temperature in °C
+float tempC = milliVolt / 10;
+Serial.print("Temperature (oC): ");
+Serial.println(temperatureC);
+
+// Write to ThingSpeak. There are up to 8 fields in a channel, allowing the user to store up to 8
+different pieces of information in a channel. Here, the sensor reading is written to field 1.
+
+int x = ThingSpeak.writeField(myChannelNumber, 1, tempC, myWriteAPIKey);
+
+//To write to ThingSpeak , use the writeField() method that accepts the following arguments : (a)
+the channel number (b) the field number (in our case, there is only one field) (c) the value to be
+published (temperatureC) and (d) the write API key.This function returns the code 200 if it has
+succeeded in publishing the readings //
+
+if(x == 200)
+{
+Serial.println("Channel update successful.");
+}
+else
+{
+Serial.println("Problem updating channel. HTTP error code " + String(x));
+}
+lastTime = millis();
+}
+}
+
+---------------------------nornmal gcr code----------------------
 
 
 **************************************************************************************
@@ -777,3 +1108,4 @@ void TaskBlink(void *pvParameters)
     }
   }
 }
+
